@@ -16,7 +16,6 @@ import com.frostwire.jlibtorrent.alerts.Alert
 import com.frostwire.jlibtorrent.alerts.AlertType
 import com.frostwire.jlibtorrent.alerts.BlockFinishedAlert
 import com.frostwire.jlibtorrent.swig.*
-import com.turn.ttorrent.client.SharedTorrent
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
@@ -171,43 +170,34 @@ class TorrentManager(
         }
     }
     @RequiresApi(Build.VERSION_CODES.O)
-    fun createTorrentInfo(collection: Uri, context: Context): Pair<Path, TorrentInfo>? {
+    fun createTorrentInfo(collection: Uri, context: Context, creator: String): Pair<Path, TorrentInfo>? {
         Log.d("DeToks", "AAAAAAAAAAAAAA")
 
         val parentDir = Paths.get(cacheDir.getPath()+"/"+collection.hashCode().toString())
         val out = copyToTempFolder(context, listOf(collection), parentDir)
 
         Log.d("DeToks", collection.toString())
-        val out2 = getVideoFilePath(collection,context)
-        val folder = Paths.get(out2.first)
-
 
         Log.d("DeToks", "VALID: ${out.second.is_valid}" )
-        val ec =  error_code()
 
         var fs = file_storage()
         libtorrent.add_files(fs,cacheDir.getPath()+"/"+collection.hashCode().toString())
-        val ct = create_torrent(fs)
+
         val tb = TorrentBuilder()
-        tb.creator("Moi")
+
+
+        tb.creator(creator)
         tb.path(File(cacheDir.getPath()+"/"+collection.hashCode().toString()))
 
-        ct.set_creator("Moi")
-        ct.set_priv(false)
 
-        ct.add_tracker("udp://tracker.openbittorrent.com:80/announce",1)
-        libtorrent.set_piece_hashes(ct,cacheDir.getPath(), ec)
-        Log.d("DeToks","ec ${ec.value()}")
-//        val et = ct.generate()
-        Log.d("DeToks", folder.toString())
+        tb.addTracker("udp://tracker.openbittorrent.com:80/announce")
+        tb.addTracker("udp://opentracker.i2p.rocks:6969/announce")
+        tb.addTracker("http://opentracker.i2p.rocks:6969/announce")
 
-
-        Log.d("DeToks", out2.first!!)
-        Log.d("DeToks", out.first.absolutePath)
 
 
         val torrentInfo = TorrentInfo(tb.generate().entry().bencode())
-//        torrentInfo.addTracker("udp://tracker.openbittorrent.com:80/announce")
+
         val infoHash = torrentInfo.infoHash().toString()
         val par = torrentDir.absolutePath
         val torrentPath = Paths.get("$par/$infoHash.torrent")
@@ -345,8 +335,10 @@ class TorrentManager(
                 }
             }
         })
-
-        sessionManager.start()
+        val sp = SettingsPack()
+        sp.seedingOutgoingConnections(true).activeSeeds(20)
+        val params =SessionParams(sp)
+        sessionManager.start(params)
     }
 
     private fun clearMediaCache() {
